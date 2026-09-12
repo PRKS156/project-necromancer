@@ -1,0 +1,7 @@
+scapy
+psutil
+streamlit
+requests
+pandas
+fpdf2
+markdown
