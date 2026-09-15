@@ -18,6 +18,24 @@ def condense_crash_data(filepath):
     src_ips = [p["src"] for p in packets]
     protocols = [p["protocol"] for p in packets]
 
+    # ICMP tracking
+    icmp_packets = [p for p in packets if p.get("protocol") == "ICMP"]
+    icmp_total_packets = len(icmp_packets)
+    
+    # Port scan tracking (unique dports per source IP)
+    ports_by_src = {}
+    for p in packets:
+        ip = p["src"]
+        dport = p.get("dport", 0)
+        if dport > 0:
+            if ip not in ports_by_src:
+                ports_by_src[ip] = set()
+            ports_by_src[ip].add(dport)
+            
+    max_unique_dports = 0
+    if ports_by_src:
+        max_unique_dports = max(len(ports) for ports in ports_by_src.values())
+
     top_talkers = Counter(src_ips).most_common(3)
     proto_distribution = Counter(protocols).most_common()
 
@@ -32,5 +50,7 @@ def condense_crash_data(filepath):
         "flood_top_offending_sources": flood_top_talkers,
         "protocol_mix": proto_distribution,
         "avg_cpu_utilization": round(avg_cpu, 2),
-        "avg_bandwidth_recv_mbps": round(avg_recv, 2)
+        "avg_bandwidth_recv_mbps": round(avg_recv, 2),
+        "icmp_total_packets": icmp_total_packets,
+        "max_unique_dports_per_ip": max_unique_dports
     }

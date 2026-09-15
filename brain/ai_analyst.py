@@ -16,7 +16,7 @@ def query_local_ai(profile, signature_hint):
     
     You MUST output a valid JSON object matching exactly this layout:
     {{
-       "predicted_cause": "Select from: DDOS_ATTACK, RESOURCE_EXHAUSTION, INTERFACE_DROP, UNKNOWN_ANOMALY",
+       "predicted_cause": "Select from: DDOS_ATTACK, PORT_SCAN, ICMP_FLOOD, RESOURCE_EXHAUSTION, INTERFACE_DROP, UNKNOWN_ANOMALY",
        "confidence_score": 0.90
     }}
     """

@@ -115,11 +115,27 @@ if st.sidebar.button("Inject Gateway Disconnection"):
     st.sidebar.success("Gateway drop trace ready.")
 
 st.sidebar.markdown("---")
+st.sidebar.header("Live Attack Simulators")
+st.sidebar.info("Sends real traffic to your local machine. Requires main.py engine to be running.")
+
+import subprocess
+if st.sidebar.button("Launch DDoS (stress_test.py)"):
+    subprocess.Popen([sys.executable, "stress_test.py"])
+    st.sidebar.success("DDoS packet flood launched in background!")
+if st.sidebar.button("Launch Port Scan"):
+    subprocess.Popen([sys.executable, "simulate_port_scan.py"])
+    st.sidebar.success("Port scan launched in background!")
+if st.sidebar.button("Launch ICMP Flood"):
+    subprocess.Popen([sys.executable, "simulate_icmp_flood.py"])
+    st.sidebar.success("ICMP Flood launched! (Note: Requires Administrator privileges)")
+
+st.sidebar.markdown("---")
 st.sidebar.header("Live Engine Trigger")
 if st.sidebar.button("Trigger Live Crash (main.py)"):
     with open("trigger_crash.txt", "w") as f:
         f.write("crash")
     st.sidebar.success("trigger_crash.txt created! Engine should freeze data shortly.")
+
 if mode == "Live Operational Telemetry":
     st.subheader("Live Telemetry Matrix Monitor")
     st.info("Background threads (when main.py is running) stream traffic into a RAM-only buffer.")

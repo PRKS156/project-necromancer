@@ -1,5 +1,5 @@
 import threading
-from scapy.all import sniff, IP, TCP, UDP
+from scapy.all import sniff, IP, TCP, UDP, ICMP
 
 class AsyncSniffer(threading.Thread):
     def __init__(self, buffer_manager, interface_name="Wi-Fi"):
@@ -24,6 +24,10 @@ class AsyncSniffer(threading.Thread):
                 proto = "UDP"
                 sport = packet[UDP].sport
                 dport = packet[UDP].dport
+            elif ICMP in packet:
+                proto = "ICMP"
+                sport = 0
+                dport = 0
 
             summary = {
                 "src": src_ip,

@@ -17,19 +17,48 @@ def check_file_trigger():
     return os.path.exists("trigger_crash.txt")
 
 
-def check_live_anomaly(buf):
-    recent = list(buf.packet_buffer)[-LIVE_WATCHDOG_MIN_SAMPLE:]
-    if len(recent) < LIVE_WATCHDOG_MIN_SAMPLE:
-        return False
+def check_live_anomalies(buf):
+    # Network anomalies
+    recent_packets = list(buf.packet_buffer)[-LIVE_WATCHDOG_MIN_SAMPLE:]
+    if len(recent_packets) >= LIVE_WATCHDOG_MIN_SAMPLE:
+        src_ips = [p["src"] for p in recent_packets]
+        if src_ips:
+            top_ip = max(set(src_ips), key=src_ips.count)
+            top_count = src_ips.count(top_ip)
+            if (top_count / len(recent_packets)) > LIVE_WATCHDOG_DOMINANCE_RATIO:
+                print(f"[WATCHDOG] DDoS anomaly detected from {top_ip}")
+                return True
+        
+        # ICMP Flood Check
+        icmp_count = sum(1 for p in recent_packets if p.get("protocol") == "ICMP")
+        if icmp_count > 100:
+            print("[WATCHDOG] ICMP flood anomaly detected")
+            return True
+            
+        # Port Scan Check
+        ports_by_src = {}
+        for p in recent_packets:
+            ip = p["src"]
+            dport = p.get("dport", 0)
+            if dport > 0:
+                if ip not in ports_by_src:
+                    ports_by_src[ip] = set()
+                ports_by_src[ip].add(dport)
+        
+        for ip, ports in ports_by_src.items():
+            if len(ports) > 20:
+                print(f"[WATCHDOG] Port scan anomaly detected from {ip}")
+                return True
 
-    src_ips = [p["src"] for p in recent]
-    if not src_ips:
-        return False
+    # Resource Exhaustion Check
+    recent_metrics = list(buf.metric_buffer)[-10:]
+    if len(recent_metrics) >= 5:
+        avg_cpu = sum(m.get("cpu_percent", 0) for m in recent_metrics) / len(recent_metrics)
+        if avg_cpu > 90.0:
+            print(f"[WATCHDOG] Resource exhaustion anomaly detected: CPU at {avg_cpu:.1f}%")
+            return True
 
-    top_ip = max(set(src_ips), key=src_ips.count)
-    top_count = src_ips.count(top_ip)
-
-    return (top_count / len(recent)) > LIVE_WATCHDOG_DOMINANCE_RATIO
+    return False
 
 
 def main():
@@ -52,6 +81,9 @@ def main():
 
             past_grace_period = (time.time() - engine_start_time) > STARTUP_GRACE_PERIOD_SECS
             crash_triggered = check_file_trigger()
+
+            if past_grace_period and not crash_triggered:
+                crash_triggered = check_live_anomalies(buf)
 
             if crash_triggered:
                 print("\n[ALERT] CRASH DETECTED. FREEZING RECORDER SUBSYSTEMS...")
