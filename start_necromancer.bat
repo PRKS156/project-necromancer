@@ -1,7 +1,10 @@
 @echo off
 setlocal
 
-echo === Project Necromancer Setup & Launcher ===
+:: Change working directory to the script's location (fixes 'Run as Administrator' path issues)
+cd /d "%~dp0"
+
+echo === Project Necromancer Setup and Launcher ===
 
 :: Check for Python
 python --version >nul 2>&1
