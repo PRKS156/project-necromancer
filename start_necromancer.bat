@@ -48,9 +48,11 @@ start /B streamlit run interface\dashboard.py --server.port 8501 --server.addres
 :: Give Streamlit a moment to start up
 timeout /t 3 /nobreak >nul
 
-:: Start Cloudflare tunnel in the foreground so the user sees the public link
-echo [INFO] Creating public tunnel...
-cloudflared tunnel --url http://localhost:8501
+:: Remove Cloudflare tunnel command since trycloudflare quick tunnels are unreliable (Status 409)
+echo [INFO] Dashboard is running locally. Access it at http://localhost:8501
+echo [INFO] Keep this window open to keep the engine running.
 
+:: Keep the batch script open so background processes don't get orphaned if launched via UI
+pause
 echo === Exiting Launcher ===
 endlocal
