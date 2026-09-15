@@ -10,11 +10,19 @@ CAUSE_TO_ACTION = {
 }
 
 def rule_check(profile, active_interface="Wi-Fi"):
+    # DDoS Check (Port 53 specific + general flood)
     flood_total = profile.get("flood_total_packets", 0)
-
     for ip, count in profile.get("flood_top_offending_sources", []):
         if flood_total > 500 and (count / flood_total) > 0.7:
             return {"status": "CRITICAL", "cause": "DDOS_ATTACK", "target": ip}
+            
+    # Generic DDoS check (Any port, with file download filtering)
+    total_pkts = profile.get("total_captured_packets", 0)
+    avg_size = profile.get("top_talker_avg_size", 0)
+    if total_pkts > 1000:
+        for ip, count in profile.get("top_offending_sources", []):
+            if (count / total_pkts) > 0.7 and avg_size < 500:
+                return {"status": "CRITICAL", "cause": "DDOS_ATTACK", "target": ip}
 
     if profile.get("avg_cpu_utilization", 0) > 90.0:
         return {"status": "CRITICAL", "cause": "RESOURCE_EXHAUSTION", "target": "runaway_process"}
@@ -24,7 +32,8 @@ def rule_check(profile, active_interface="Wi-Fi"):
         target_ip = top_talkers[0][0] if top_talkers else "unknown_ip"
         return {"status": "CRITICAL", "cause": "ICMP_FLOOD", "target": target_ip}
 
-    if profile.get("max_unique_dports_per_ip", 0) > 20:
+    # Port Scan Check (with P2P filtering)
+    if profile.get("max_unique_dports_per_ip", 0) > 20 and profile.get("scan_packets_per_port", 999) < 5:
         top_talkers = profile.get("top_offending_sources", [])
         target_ip = top_talkers[0][0] if top_talkers else "unknown_ip"
         return {"status": "CRITICAL", "cause": "PORT_SCAN", "target": target_ip}

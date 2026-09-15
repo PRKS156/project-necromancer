@@ -34,6 +34,30 @@ RULE_BOOK = {
             "Ignore traffic from unverified addresses."
         ]
     },
+    "ICMP_FLOOD": {
+        "plain_explanation": (
+            "Someone is flooding your machine with thousands of 'ping' requests per second — "
+            "like someone ringing your doorbell non-stop so you can't hear anything else."
+        ),
+        "auto_remediation": "The system blocks the source IP sending the ICMP flood at the firewall.",
+        "optimization_tips": [
+            "Rate-limit ICMP traffic at the router level.",
+            "Disable ICMP echo replies on production servers.",
+            "Use a hardware firewall that can drop ICMP floods before they reach the OS."
+        ]
+    },
+    "PORT_SCAN": {
+        "plain_explanation": (
+            "Someone is rapidly probing many different doors (ports) on your machine to find "
+            "which ones are open — like a burglar checking every window in your house."
+        ),
+        "auto_remediation": "The system blocks the scanner's IP address at the firewall.",
+        "optimization_tips": [
+            "Close all ports that don't need to be open.",
+            "Use a firewall that detects and blocks sequential port probes.",
+            "Hide services behind non-standard port numbers."
+        ]
+    },
     "RESOURCE_EXHAUSTION": {
         "plain_explanation": (
             "Your computer's processor got so overloaded doing background work that "
@@ -76,9 +100,21 @@ def generate_mock_crash(incident_type, offending_ip="192.168.1.105"):
     if incident_type == "DDOS_ATTACK":
         for _ in range(1200):
             packets.append({"src": offending_ip, "dst": "192.168.1.1", "protocol": "UDP",
-                             "sport": 53, "dport": 53, "size": 512})
+                             "sport": 53, "dport": 53, "size": 128})
         metrics = [{"cpu_percent": 45.2, "memory_percent": 50.1,
                     "mb_sent_per_sec": 0.5, "mb_recv_per_sec": 48.2} for _ in range(30)]
+    elif incident_type == "ICMP_FLOOD":
+        for _ in range(250):
+            packets.append({"src": offending_ip, "dst": "192.168.1.1", "protocol": "ICMP",
+                             "sport": 0, "dport": 0, "size": 64})
+        metrics = [{"cpu_percent": 55.0, "memory_percent": 45.0,
+                    "mb_sent_per_sec": 0.1, "mb_recv_per_sec": 12.5} for _ in range(30)]
+    elif incident_type == "PORT_SCAN":
+        for port in range(1, 101):
+            packets.append({"src": offending_ip, "dst": "192.168.1.1", "protocol": "UDP",
+                             "sport": 54321, "dport": port, "size": 40})
+        metrics = [{"cpu_percent": 20.0, "memory_percent": 40.0,
+                    "mb_sent_per_sec": 0.05, "mb_recv_per_sec": 0.1} for _ in range(30)]
     elif incident_type == "RESOURCE_EXHAUSTION":
         for _ in range(100):
             packets.append({"src": "192.168.1.50", "dst": "192.168.1.1", "protocol": "TCP",
@@ -110,6 +146,12 @@ if st.sidebar.button("Inject DDoS Flood Anomaly"):
 if st.sidebar.button("Inject CPU Resource Exhaustion"):
     generate_mock_crash("RESOURCE_EXHAUSTION")
     st.sidebar.success("Resource trace ready.")
+if st.sidebar.button("Inject ICMP Ping Flood"):
+    generate_mock_crash("ICMP_FLOOD")
+    st.sidebar.success("ICMP flood trace ready.")
+if st.sidebar.button("Inject Port Scan Probe"):
+    generate_mock_crash("PORT_SCAN")
+    st.sidebar.success("Port scan trace ready.")
 if st.sidebar.button("Inject Gateway Disconnection"):
     generate_mock_crash("INTERFACE_DROP")
     st.sidebar.success("Gateway drop trace ready.")

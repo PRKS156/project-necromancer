@@ -59,6 +59,8 @@ SEEN_FILES = set()
 def _explanation_for(cause):
     explanations = {
         "DDOS_ATTACK": "A single source is flooding this machine with requests.",
+        "PORT_SCAN": "A single source is probing many ports on this machine looking for vulnerabilities.",
+        "ICMP_FLOOD": "A single source is flooding this machine with ICMP ping requests.",
         "RESOURCE_EXHAUSTION": "One process is consuming most of the CPU.",
         "INTERFACE_DROP": "The network interface dropped unexpectedly.",
     }

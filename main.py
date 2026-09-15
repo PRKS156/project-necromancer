@@ -19,15 +19,19 @@ def check_file_trigger():
 
 def check_live_anomalies(buf):
     # Network anomalies
-    recent_packets = list(buf.packet_buffer)[-LIVE_WATCHDOG_MIN_SAMPLE:]
+    recent_packets = buf.get_recent_packets(LIVE_WATCHDOG_MIN_SAMPLE)
     if len(recent_packets) >= LIVE_WATCHDOG_MIN_SAMPLE:
         src_ips = [p["src"] for p in recent_packets]
         if src_ips:
             top_ip = max(set(src_ips), key=src_ips.count)
             top_count = src_ips.count(top_ip)
             if (top_count / len(recent_packets)) > LIVE_WATCHDOG_DOMINANCE_RATIO:
-                print(f"[WATCHDOG] DDoS anomaly detected from {top_ip}")
-                return True
+                # DDoS Check Refinement: Ignore large file uploads
+                attacker_packets = [p for p in recent_packets if p["src"] == top_ip]
+                avg_size = sum(p.get("size", 0) for p in attacker_packets) / max(len(attacker_packets), 1)
+                if avg_size < 500:
+                    print(f"[WATCHDOG] DDoS anomaly detected from {top_ip} (Avg Size: {avg_size:.1f}b)")
+                    return True
         
         # ICMP Flood Check
         icmp_count = sum(1 for p in recent_packets if p.get("protocol") == "ICMP")
@@ -35,23 +39,27 @@ def check_live_anomalies(buf):
             print("[WATCHDOG] ICMP flood anomaly detected")
             return True
             
-        # Port Scan Check
-        ports_by_src = {}
+        # Port Scan Check Refinement
+        port_scan_stats = {}
         for p in recent_packets:
             ip = p["src"]
             dport = p.get("dport", 0)
             if dport > 0:
-                if ip not in ports_by_src:
-                    ports_by_src[ip] = set()
-                ports_by_src[ip].add(dport)
+                if ip not in port_scan_stats:
+                    port_scan_stats[ip] = {"ports": set(), "count": 0}
+                port_scan_stats[ip]["ports"].add(dport)
+                port_scan_stats[ip]["count"] += 1
         
-        for ip, ports in ports_by_src.items():
-            if len(ports) > 20:
-                print(f"[WATCHDOG] Port scan anomaly detected from {ip}")
-                return True
+        for ip, stats in port_scan_stats.items():
+            num_ports = len(stats["ports"])
+            if num_ports > 20:
+                packets_per_port = stats["count"] / num_ports
+                if packets_per_port < 5:
+                    print(f"[WATCHDOG] Port scan anomaly detected from {ip} (Pkt/Port: {packets_per_port:.1f})")
+                    return True
 
     # Resource Exhaustion Check
-    recent_metrics = list(buf.metric_buffer)[-10:]
+    recent_metrics = buf.get_recent_metrics(10)
     if len(recent_metrics) >= 5:
         avg_cpu = sum(m.get("cpu_percent", 0) for m in recent_metrics) / len(recent_metrics)
         if avg_cpu > 90.0:
@@ -63,20 +71,27 @@ def check_live_anomalies(buf):
 
 def main():
     print("=== INITIALIZING PROJECT NECROMANCER ENGINE ===")
-    buf = NetworkBuffer()
-
-    sniffer = AsyncSniffer(buf, interface_name=ACTIVE_INTERFACE)
-    metrics = MetricsCollector(buf)
-
-    sniffer.start()
-    metrics.start()
-    print(f"[RUNNING] Queues operational. Capturing on interface: {ACTIVE_INTERFACE}")
+    print(f"[RUNNING] Capturing on interface: {ACTIVE_INTERFACE}")
     print("[INFO] Two ways to trigger a crash for this demo:")
     print("  1) Controlled: create a blank file named 'trigger_crash.txt' here.")
     print("  2) Live: run stress_test.py in another terminal to flood this machine for real.")
-    engine_start_time = time.time()
+
+    buf = None
+    sniffer = None
+    metrics = None
+
     try:
         while True:
+            # (Re)initialize subsystems for a fresh monitoring cycle
+            if buf is None:
+                buf = NetworkBuffer()
+                sniffer = AsyncSniffer(buf, interface_name=ACTIVE_INTERFACE)
+                metrics = MetricsCollector(buf)
+                sniffer.start()
+                metrics.start()
+                engine_start_time = time.time()
+                print("[RUNNING] Queues operational. Monitoring for anomalies...")
+
             time.sleep(2)
 
             past_grace_period = (time.time() - engine_start_time) > STARTUP_GRACE_PERIOD_SECS
@@ -117,10 +132,19 @@ def main():
 
                 if os.path.exists("trigger_crash.txt"):
                     os.remove("trigger_crash.txt")
-                break
+
+                # Reset subsystems so the engine restarts monitoring
+                buf = None
+                sniffer = None
+                metrics = None
+                print("\n[RECOVERY] Engine restarting monitoring cycle...\n")
+
     except KeyboardInterrupt:
-        sniffer.stop()
-        metrics.stop()
+        if sniffer:
+            sniffer.stop()
+        if metrics:
+            metrics.stop()
+        print("\n[SHUTDOWN] Engine stopped by user.")
 
 
 if __name__ == "__main__":
